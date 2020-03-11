@@ -56,6 +56,10 @@ else ifeq ($(BOARD), vc707)
 	XILINX_PART              := xc7vx485tffg1761-2
 	XILINX_BOARD             := xilinx.com:vc707:part0:1.3
 	CLK_PERIOD_NS            := 20
+else ifeq ($(BOARD), vcu108)
+	XILINX_PART              := xcvu095-ffva2104-2-e
+	XILINX_BOARD             := xilinx.com:vcu108:part0:1.6
+	CLK_PERIOD_NS            := 20
 else
 $(error Unknown board - please specify a supported FPGA board)
 endif
@@ -157,7 +161,7 @@ src :=  $(filter-out src/ariane_regfile.sv, $(wildcard src/*.sv))              \
         src/common_cells/src/rstgen.sv                                         \
         src/common_cells/src/stream_mux.sv                                     \
         src/common_cells/src/stream_demux.sv                                   \
-	src/common_cells/src/exp_backoff.sv                                    \
+	    src/common_cells/src/exp_backoff.sv                                    \
         src/util/axi_master_connect.sv                                         \
         src/util/axi_slave_connect.sv                                          \
         src/util/axi_master_connect_rev.sv                                     \
