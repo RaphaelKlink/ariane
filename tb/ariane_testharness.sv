@@ -17,7 +17,11 @@ module ariane_testharness #(
   parameter int unsigned AXI_USER_WIDTH    = 1,
   parameter int unsigned AXI_ADDRESS_WIDTH = 64,
   parameter int unsigned AXI_DATA_WIDTH    = 64,
+`ifdef DROMAJO
+  parameter bit          InclSimDTM        = 1'b0,
+`else
   parameter bit          InclSimDTM        = 1'b1,
+`endif
   parameter int unsigned NUM_WORDS         = 2**25,         // memory size
   parameter bit          StallRandomOutput = 1'b0,
   parameter bit          StallRandomInput  = 1'b0
@@ -98,6 +102,7 @@ module ariane_testharness #(
 
   initial begin
     if (!$value$plusargs("jtag_rbb_enable=%b", jtag_enable)) jtag_enable = 'h0;
+    if (riscv::XLEN != 32 & riscv::XLEN != 64) $error("XLEN different from 32 and 64");
   end
 
   // debug if MUX
@@ -319,13 +324,21 @@ module ariane_testharness #(
     .data_i ( rom_rdata               )
   );
 
+`ifdef DROMAJO
+  dromajo_bootrom i_bootrom (
+    .clk_i      ( clk_i     ),
+    .req_i      ( rom_req   ),
+    .addr_i     ( rom_addr  ),
+    .rdata_o    ( rom_rdata )
+  );
+`else
   bootrom i_bootrom (
     .clk_i      ( clk_i     ),
     .req_i      ( rom_req   ),
     .addr_i     ( rom_addr  ),
     .rdata_o    ( rom_rdata )
   );
-
+`endif
   // ------------------------------
   // Memory + Exclusive Access
   // ------------------------------
@@ -514,6 +527,9 @@ module ariane_testharness #(
 
   sram #(
     .DATA_WIDTH ( AXI_DATA_WIDTH ),
+`ifdef DROMAJO
+    .DROMAJO_RAM (1),
+`endif
     .NUM_WORDS  ( NUM_WORDS      )
   ) i_sram (
     .clk_i      ( clk_i                                                                       ),
@@ -529,6 +545,8 @@ module ariane_testharness #(
   // ---------------
   // AXI Xbar
   // ---------------
+  typedef logic [ariane_soc::NrRegion-1:0][ariane_soc::NB_PERIPHERALS-1:0][AXI_ADDRESS_WIDTH-1:0] addr_map_t;
+  
   axi_node_intf_wrap #(
     .NB_SLAVE           ( ariane_soc::NrSlaves       ),
     .NB_MASTER          ( ariane_soc::NB_PERIPHERALS ),
@@ -545,7 +563,7 @@ module ariane_testharness #(
     .test_en_i    ( test_en    ),
     .slave        ( slave      ),
     .master       ( master     ),
-    .start_addr_i ({
+    .start_addr_i (addr_map_t'({
       ariane_soc::DebugBase,
       ariane_soc::ROMBase,
       ariane_soc::CLINTBase,
@@ -556,8 +574,8 @@ module ariane_testharness #(
       ariane_soc::EthernetBase,
       ariane_soc::GPIOBase,
       ariane_soc::DRAMBase
-    }),
-    .end_addr_i   ({
+    })),
+    .end_addr_i   (addr_map_t'({
       ariane_soc::DebugBase    + ariane_soc::DebugLength - 1,
       ariane_soc::ROMBase      + ariane_soc::ROMLength - 1,
       ariane_soc::CLINTBase    + ariane_soc::CLINTLength - 1,
@@ -568,7 +586,7 @@ module ariane_testharness #(
       ariane_soc::EthernetBase + ariane_soc::EthernetLength -1,
       ariane_soc::GPIOBase     + ariane_soc::GPIOLength - 1,
       ariane_soc::DRAMBase     + ariane_soc::DRAMLength - 1
-    }),
+    })),
     .valid_rule_i (ariane_soc::ValidRule)
   );
 

@@ -12,9 +12,8 @@
 // Date: 15.04.2017
 // Description: Commits to the architectural state resulting from the scoreboard.
 
-import ariane_pkg::*;
 
-module commit_stage #(
+module commit_stage import ariane_pkg::*; #(
     parameter int unsigned NR_COMMIT_PORTS = 2
 )(
     input  logic                                    clk_i,
@@ -29,7 +28,7 @@ module commit_stage #(
     output logic [NR_COMMIT_PORTS-1:0]              commit_ack_o,       // acknowledge that we are indeed committing
     // to register file
     output  logic [NR_COMMIT_PORTS-1:0][4:0]        waddr_o,            // register file write address
-    output  logic [NR_COMMIT_PORTS-1:0][63:0]       wdata_o,            // register file write data
+    output  logic [NR_COMMIT_PORTS-1:0][riscv::XLEN-1:0] wdata_o,       // register file write data
     output  logic [NR_COMMIT_PORTS-1:0]             we_gpr_o,           // register file write enable
     output  logic [NR_COMMIT_PORTS-1:0]             we_fpr_o,           // floating point register enable
     // Atomic memory operations
@@ -38,8 +37,8 @@ module commit_stage #(
     output logic [riscv::VLEN-1:0]                  pc_o,
     // to/from CSR file
     output fu_op                                    csr_op_o,           // decoded CSR operation
-    output logic [63:0]                             csr_wdata_o,        // data to write to CSR
-    input  logic [63:0]                             csr_rdata_i,        // data to read from CSR
+    output riscv::xlen_t                            csr_wdata_o,        // data to write to CSR
+    input  riscv::xlen_t                            csr_rdata_i,        // data to read from CSR
     input  exception_t                              csr_exception_i,    // exception or interrupt occurred in CSR stage (the same as commit)
     output logic                                    csr_write_fflags_o, // write the fflags CSR
     // commit signals to ex
@@ -69,9 +68,9 @@ module commit_stage #(
 //     .probe9(1'b0) // input wire [0:0]  probe9
 // );
 
-    // TODO make these parametric with NR_COMMIT_PORTS
-    assign waddr_o[0] = commit_instr_i[0].rd[4:0];
-    assign waddr_o[1] = commit_instr_i[1].rd[4:0];
+    for (genvar i = 0; i < NR_COMMIT_PORTS; i++) begin : gen_waddr
+      assign waddr_o[i] = commit_instr_i[i].rd[4:0];
+    end
 
     assign pc_o       = commit_instr_i[0].pc;
     // Dirty the FP state if we are committing anything related to the FPU
@@ -103,10 +102,10 @@ module commit_stage #(
         commit_lsu_o       = 1'b0;
         commit_csr_o       = 1'b0;
         // amos will commit on port 0
-        wdata_o[0]      = (amo_resp_i.ack) ? amo_resp_i.result : commit_instr_i[0].result;
+        wdata_o[0]      = (amo_resp_i.ack) ? amo_resp_i.result[riscv::XLEN-1:0] : commit_instr_i[0].result;
         wdata_o[1]      = commit_instr_i[1].result;
         csr_op_o        = ADD; // this corresponds to a CSR NOP
-        csr_wdata_o        = 64'b0;
+        csr_wdata_o        = {riscv::XLEN{1'b0}};
         fence_i_o          = 1'b0;
         fence_o            = 1'b0;
         sfence_vma_o       = 1'b0;
@@ -140,7 +139,7 @@ module commit_stage #(
             // ---------
             if (commit_instr_i[0].fu inside {FPU, FPU_VEC}) begin
                 // write the CSR with potential exception flags from retiring floating point instruction
-                csr_wdata_o = {59'b0, commit_instr_i[0].ex.cause[4:0]};
+                csr_wdata_o = {{riscv::XLEN-5{1'b0}}, commit_instr_i[0].ex.cause[4:0]};
                 csr_write_fflags_o = 1'b1;
                 commit_ack_o[0] = 1'b1;
             end
@@ -209,38 +208,40 @@ module commit_stage #(
             end
         end
 
-        // -----------------
-        // Commit Port 2
-        // -----------------
-        // check if the second instruction can be committed as well and the first wasn't a CSR instruction
-        // also if we are in single step mode don't retire the second instruction
-        if (commit_ack_o[0] && commit_instr_i[1].valid
-                            && !halt_i
-                            && !(commit_instr_i[0].fu inside {CSR})
-                            && !flush_dcache_i
-                            && !instr_0_is_amo
-                            && !single_step_i) begin
-            // only if the first instruction didn't throw an exception and this instruction won't throw an exception
-            // and the functional unit is of type ALU, LOAD, CTRL_FLOW, MULT, FPU or FPU_VEC
-            if (!exception_o.valid && !commit_instr_i[1].ex.valid
-                                   && (commit_instr_i[1].fu inside {ALU, LOAD, CTRL_FLOW, MULT, FPU, FPU_VEC})) begin
+        if (NR_COMMIT_PORTS > 1) begin
+            // -----------------
+            // Commit Port 2
+            // -----------------
+            // check if the second instruction can be committed as well and the first wasn't a CSR instruction
+            // also if we are in single step mode don't retire the second instruction
+            if (commit_ack_o[0] && commit_instr_i[1].valid
+                                && !halt_i
+                                && !(commit_instr_i[0].fu inside {CSR})
+                                && !flush_dcache_i
+                                && !instr_0_is_amo
+                                && !single_step_i) begin
+                // only if the first instruction didn't throw an exception and this instruction won't throw an exception
+                // and the functional unit is of type ALU, LOAD, CTRL_FLOW, MULT, FPU or FPU_VEC
+                if (!exception_o.valid && !commit_instr_i[1].ex.valid
+                                       && (commit_instr_i[1].fu inside {ALU, LOAD, CTRL_FLOW, MULT, FPU, FPU_VEC})) begin
 
-                if (is_rd_fpr(commit_instr_i[1].op))
-                    we_fpr_o[1] = 1'b1;
-                else
-                    we_gpr_o[1] = 1'b1;
-
-                commit_ack_o[1] = 1'b1;
-
-                // additionally check if we are retiring an FPU instruction because we need to make sure that we write all
-                // exception flags
-                if (commit_instr_i[1].fu inside {FPU, FPU_VEC}) begin
-                    if (csr_write_fflags_o)
-                        csr_wdata_o = {59'b0, (commit_instr_i[0].ex.cause[4:0] | commit_instr_i[1].ex.cause[4:0])};
+                    if (is_rd_fpr(commit_instr_i[1].op))
+                        we_fpr_o[1] = 1'b1;
                     else
-                        csr_wdata_o = {59'b0, commit_instr_i[1].ex.cause[4:0]};
+                        we_gpr_o[1] = 1'b1;
 
-                    csr_write_fflags_o = 1'b1;
+                    commit_ack_o[1] = 1'b1;
+
+                    // additionally check if we are retiring an FPU instruction because we need to make sure that we write all
+                    // exception flags
+                    if (commit_instr_i[1].fu inside {FPU, FPU_VEC}) begin
+                        if (csr_write_fflags_o)
+                            csr_wdata_o = {{riscv::XLEN-5{1'b0}}, (commit_instr_i[0].ex.cause[4:0] | commit_instr_i[1].ex.cause[4:0])};
+                        else
+                            csr_wdata_o = {{riscv::XLEN-5{1'b0}}, commit_instr_i[1].ex.cause[4:0]};
+
+                        csr_write_fflags_o = 1'b1;
+                    end
                 end
             end
         end
@@ -255,8 +256,8 @@ module commit_stage #(
         // priority order: external interrupts, software interrupts, timer interrupts, then finally any synchronous traps. (1.10 p.30)
         // interrupts are correctly prioritized in the CSR reg file, exceptions are prioritized here
         exception_o.valid = 1'b0;
-        exception_o.cause = 64'b0;
-        exception_o.tval  = 64'b0;
+        exception_o.cause = '0;
+        exception_o.tval  = '0;
         // we need a valid instruction in the commit stage
         if (commit_instr_i[0].valid) begin
             // ------------------------

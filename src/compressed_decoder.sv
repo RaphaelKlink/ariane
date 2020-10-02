@@ -18,7 +18,6 @@
 // Description:    Decodes RISC-V compressed instructions into their RV32
 //                 equivalent. This module is fully combinatorial.
 
-import ariane_pkg::*;
 
 module compressed_decoder
 (
@@ -202,7 +201,6 @@ module compressed_decoder
                     riscv::OpcodeC2Fldsp: begin
                         // c.fldsp -> fld rd, imm(x2)
                         instr_o = {3'b0, instr_i[4:2], instr_i[12], instr_i[6:5], 3'b000, 5'h02, 3'b011, instr_i[11:7], riscv::OpcodeLoadFp};
-                        if (instr_i[11:7] == 5'b0)  illegal_instr_o = 1'b1;
                     end
 
                     riscv::OpcodeC2Lwsp: begin

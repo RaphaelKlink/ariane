@@ -52,6 +52,7 @@ package ariane_pkg;
       bit                               SwapEndianess;         // set to 1 to swap endianess inside L1.5 openpiton adapter
       //
       logic [63:0]                      DmBaseAddress;         // offset of the debug module
+      int unsigned                      NrPMPEntries;          // Number of PMP entries
     } ariane_cfg_t;
 
     localparam ariane_cfg_t ArianeDefaultConfig = '{
@@ -74,7 +75,8 @@ package ariane_pkg;
       Axi64BitCompliant:      1'b1,
       SwapEndianess:          1'b0,
       // debug
-      DmBaseAddress:          64'h0
+      DmBaseAddress:          64'h0,
+      NrPMPEntries:           8
     };
 
     // Function being called to check parameters
@@ -87,6 +89,7 @@ package ariane_pkg;
         assert(Cfg.NrNonIdempotentRules <= NrMaxRules);
         assert(Cfg.NrExecuteRegionRules <= NrMaxRules);
         assert(Cfg.NrCachedRegionRules  <= NrMaxRules);
+        assert(Cfg.NrPMPEntries <= 16);
       `endif
       // pragma translate_on
     endfunction
@@ -128,7 +131,7 @@ package ariane_pkg;
     localparam NR_SB_ENTRIES = 8; // number of scoreboard entries
     localparam TRANS_ID_BITS = $clog2(NR_SB_ENTRIES); // depending on the number of scoreboard entries we need that many bits
                                                       // to uniquely identify the entry in the scoreboard
-    localparam ASID_WIDTH    = 1;
+    localparam ASID_WIDTH    = (riscv::XLEN == 64) ? 16 : 1;
     localparam BITS_SATURATION_COUNTER = 2;
     localparam NR_COMMIT_PORTS = 2;
 
@@ -153,15 +156,14 @@ package ariane_pkg;
     localparam int unsigned DEPTH_COMMIT = 8;
 `endif
 
-
 `ifdef PITON_ARIANE
     // Floating-point extensions configuration
-    localparam bit RVF = 1'b1; // Is F extension enabled
-    localparam bit RVD = 1'b1; // Is D extension enabled
+    localparam bit RVF = riscv::IS_XLEN64; // Is F extension enabled
+    localparam bit RVD = riscv::IS_XLEN64; // Is D extension enabled
 `else
     // Floating-point extensions configuration
-    localparam bit RVF = 1'b1; // Is F extension enabled
-    localparam bit RVD = 1'b1; // Is D extension enabled
+    localparam bit RVF = riscv::IS_XLEN64; // Is F extension enabled
+    localparam bit RVD = riscv::IS_XLEN64; // Is D extension enabled
 `endif
     localparam bit RVA = 1'b1; // Is A extension enabled
 
@@ -202,9 +204,9 @@ package ariane_pkg;
     // ^^^^ until here ^^^^
     // ---------------------
 
-    localparam logic [63:0] ARIANE_MARCHID = 64'd3;
+    localparam riscv::xlen_t ARIANE_MARCHID = {{riscv::XLEN-32{1'b0}}, 32'd3};
 
-    localparam logic [63:0] ISA_CODE = (RVA <<  0)  // A - Atomic Instructions extension
+    localparam riscv::xlen_t ISA_CODE = (RVA <<  0)  // A - Atomic Instructions extension
                                      | (1   <<  2)  // C - Compressed extension
                                      | (RVD <<  3)  // D - Double precsision floating-point extension
                                      | (RVF <<  5)  // F - Single precsision floating-point extension
@@ -214,7 +216,7 @@ package ariane_pkg;
                                      | (1   << 18)  // S - Supervisor mode implemented
                                      | (1   << 20)  // U - User mode implemented
                                      | (NSX << 23)  // X - Non-standard extensions present
-                                     | (1   << 63); // RV64
+                                     | ((riscv::XLEN == 64 ? 2 : 1) << riscv::XLEN-2);  // MXL
 
     // 32 registers + 1 bit for re-naming = 6
     localparam REG_ADDR_SIZE = 6;
@@ -263,7 +265,7 @@ package ariane_pkg;
                                                    | riscv::SSTATUS_UPIE
                                                    | riscv::SSTATUS_SPIE
                                                    | riscv::SSTATUS_UXL
-                                                   | riscv::SSTATUS64_SD;
+                                                   | riscv::SSTATUS_SD;
 
     localparam logic [63:0] SMODE_STATUS_WRITE_MASK = riscv::SSTATUS_SIE
                                                     | riscv::SSTATUS_SPIE
@@ -284,8 +286,8 @@ package ariane_pkg;
     // Only use struct when signals have same direction
     // exception
     typedef struct packed {
-         logic [63:0] cause; // cause of exception
-         logic [63:0] tval;  // additional information of causing exception (e.g.: instruction causing it),
+         riscv::xlen_t       cause; // cause of exception
+         riscv::xlen_t       tval;  // additional information of causing exception (e.g.: instruction causing it),
                              // address of LD/ST fault
          logic        valid;
     } exception_t;
@@ -366,9 +368,9 @@ package ariane_pkg;
     // All information needed to determine whether we need to associate an interrupt
     // with the corresponding instruction or not.
     typedef struct packed {
-      logic [63:0] mie;
-      logic [63:0] mip;
-      logic [63:0] mideleg;
+      riscv::xlen_t       mie;
+      riscv::xlen_t       mip;
+      riscv::xlen_t       mideleg;
       logic        sie;
       logic        global_enable;
     } irq_ctrl_t;
@@ -423,7 +425,7 @@ package ariane_pkg;
     localparam int unsigned ICACHE_SET_ASSOC   = 4;
     // D$
     localparam int unsigned DCACHE_INDEX_WIDTH = 12;  // in bit
-    localparam int unsigned DCACHE_TAG_WIDTH   = riscv::PLEN-ICACHE_INDEX_WIDTH;  // in bit
+    localparam int unsigned DCACHE_TAG_WIDTH   = riscv::PLEN-DCACHE_INDEX_WIDTH;  // in bit
     localparam int unsigned DCACHE_LINE_WIDTH  = 128; // in bit
     localparam int unsigned DCACHE_SET_ASSOC   = 8;
 `endif
@@ -472,13 +474,13 @@ package ariane_pkg;
     typedef struct packed {
         fu_t                      fu;
         fu_op                     operator;
-        logic [63:0]              operand_a;
-        logic [63:0]              operand_b;
-        logic [63:0]              imm;
+        riscv::xlen_t             operand_a;
+        riscv::xlen_t             operand_b;
+        riscv::xlen_t             imm;
         logic [TRANS_ID_BITS-1:0] trans_id;
     } fu_data_t;
 
-    function automatic logic is_branch (input fu_op op);
+    function automatic logic op_is_branch (input fu_op op);
         unique case (op) inside
             EQ, NE, LTS, GES, LTU, GEU: return 1'b1;
             default                   : return 1'b0; // all other ops
@@ -594,7 +596,7 @@ package ariane_pkg;
         logic [REG_ADDR_SIZE-1:0] rs1;           // register source address 1
         logic [REG_ADDR_SIZE-1:0] rs2;           // register source address 2
         logic [REG_ADDR_SIZE-1:0] rd;            // register destination address
-        logic [63:0]              result;        // for unfinished instructions this field also holds the immediate,
+        riscv::xlen_t             result;        // for unfinished instructions this field also holds the immediate,
                                                  // for unfinished floating-point that are partly encoded in rs2, this field also holds rs2
                                                  // for unfinished floating-point fused operations (FMADD, FMSUB, FNMADD, FNMSUB)
                                                  // this field holds the address of the third operand from the floating-point register file
@@ -637,12 +639,15 @@ package ariane_pkg;
         riscv::pte_t           content;
     } tlb_update_t;
 
-    localparam logic [3:0] MODE_SV39 = 4'h8;
-    localparam logic [3:0] MODE_OFF = 4'h0;
-
     // Bits required for representation of physical address space as 4K pages
     // (e.g. 27*4K == 39bit address space).
     localparam PPN4K_WIDTH = 38;
+
+    typedef enum logic [1:0] {
+      FE_NONE,
+      FE_INSTR_ACCESS_FAULT,
+      FE_INSTR_PAGE_FAULT
+    } frontend_exception_t;
 
     // ----------------------
     // cache request ports
@@ -684,7 +689,7 @@ package ariane_pkg;
         amo_t        amo_op;    // atomic memory operation to perform
         logic [1:0]  size;      // 2'b10 --> word operation, 2'b11 --> double word operation
         logic [63:0] operand_a; // address
-        logic [63:0] operand_b; // data as layuoted in the register
+        logic [63:0] operand_b; // data as layouted in the register
     } amo_req_t;
 
     // AMO response coming from cache.
@@ -715,8 +720,8 @@ package ariane_pkg;
     // ----------------------
     // Arithmetic Functions
     // ----------------------
-    function automatic logic [63:0] sext32 (logic [31:0] operand);
-        return {{32{operand[31]}}, operand[31:0]};
+    function automatic riscv::xlen_t sext32 (logic [31:0] operand);
+        return {{riscv::XLEN-32{operand[31]}}, operand[31:0]};
     endfunction
 
     // ----------------------
@@ -738,18 +743,21 @@ package ariane_pkg;
     // LSU Functions
     // ----------------------
     // align data to address e.g.: shift data to be naturally 64
-    function automatic logic [63:0] data_align (logic [2:0] addr, logic [63:0] data);
-        case (addr)
-            3'b000: return data;
-            3'b001: return {data[55:0], data[63:56]};
-            3'b010: return {data[47:0], data[63:48]};
-            3'b011: return {data[39:0], data[63:40]};
-            3'b100: return {data[31:0], data[63:32]};
-            3'b101: return {data[23:0], data[63:24]};
-            3'b110: return {data[15:0], data[63:16]};
-            3'b111: return {data[7:0],  data[63:8]};
+    function automatic riscv::xlen_t data_align (logic [2:0] addr, logic [63:0] data);
+        // Set addr[2] to 1'b0 when 32bits
+        logic [2:0] addr_tmp = {(addr[2] && riscv::IS_XLEN64), addr[1:0]};
+        logic [63:0] data_tmp = {64{1'b0}};
+        case (addr_tmp)
+            3'b000: data_tmp[riscv::XLEN-1:0] = {data[riscv::XLEN-1:0]};
+            3'b001: data_tmp[riscv::XLEN-1:0] = {data[riscv::XLEN-9:0],  data[riscv::XLEN-1:riscv::XLEN-8]};
+            3'b010: data_tmp[riscv::XLEN-1:0] = {data[riscv::XLEN-17:0], data[riscv::XLEN-1:riscv::XLEN-16]};
+            3'b011: data_tmp[riscv::XLEN-1:0] = {data[riscv::XLEN-25:0], data[riscv::XLEN-1:riscv::XLEN-24]};
+            3'b100: data_tmp = {data[31:0], data[63:32]};
+            3'b101: data_tmp = {data[23:0], data[63:24]};
+            3'b110: data_tmp = {data[15:0], data[63:16]};
+            3'b111: data_tmp = {data[7:0],  data[63:8]};
         endcase
-        return data;
+        return data_tmp[riscv::XLEN-1:0];
     endfunction
 
     // generate byte enable mask
