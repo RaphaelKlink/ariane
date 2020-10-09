@@ -39,7 +39,7 @@ module mmu import ariane_pkg::*; #(
     // if we need to walk the page table we can't grant in the same cycle
     // Cycle 0
     output logic                            lsu_dtlb_hit_o,   // sent in the same cycle as the request if translation hits in the DTLB
-    output logic [riscv::PLEN-13:0]         lsu_dtlb_ppn_o,   // ppn (send same cycle as hit)
+    output logic [riscv::PPNW-1:0]          lsu_dtlb_ppn_o,   // ppn (send same cycle as hit)
     // Cycle 1
     output logic                            lsu_valid_o,      // translation is valid
     output logic [riscv::PLEN-1:0]          lsu_paddr_o,      // translated address
@@ -63,7 +63,7 @@ module mmu import ariane_pkg::*; #(
     output dcache_req_i_t                   req_port_o,
     // PMP
     input  riscv::pmpcfg_t [15:0]           pmpcfg_i,
-    input  logic [15:0][riscv::PLEN-1:0]    pmpaddr_i
+    input  logic [15:0][riscv::PLEN-3:0]    pmpaddr_i
 );
 
     logic                   iaccess_err;   // insufficient privilege to access this instruction page
@@ -397,16 +397,16 @@ module mmu import ariane_pkg::*; #(
                     // an error makes the translation valid
                     lsu_valid_o = 1'b1;
                     // the page table walker can only throw page faults
-                    lsu_exception_o = {riscv::LD_ACCESS_FAULT, ptw_bad_paddr, 1'b1};
+                    lsu_exception_o = {riscv::LD_ACCESS_FAULT, {{riscv::XLEN-riscv::PLEN{1'b0}}, ptw_bad_paddr}, 1'b1};
                 end
             end
         end
         // If translation is not enabled, check the paddr immediately against PMPs
         else if (lsu_req_q && !misaligned_ex_q.valid && !pmp_data_allow) begin
             if (lsu_is_store_q) begin
-                lsu_exception_o = {riscv::ST_ACCESS_FAULT, lsu_paddr_o, 1'b1};
+                lsu_exception_o = {riscv::ST_ACCESS_FAULT, {{riscv::XLEN-riscv::PLEN{1'b0}}, lsu_paddr_o}, 1'b1};
             end else begin
-                lsu_exception_o = {riscv::LD_ACCESS_FAULT, lsu_paddr_o, 1'b1};
+                lsu_exception_o = {riscv::LD_ACCESS_FAULT, {{riscv::XLEN-riscv::PLEN{1'b0}}, lsu_paddr_o}, 1'b1};
             end
         end
     end

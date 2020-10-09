@@ -25,7 +25,7 @@
 //
 
 
-module wt_icache import ariane_pkg::*; import wt_cache_pkg::*; #(
+module cva6_icache import ariane_pkg::*; import wt_cache_pkg::*; #(
   parameter logic [CACHE_ID_WIDTH-1:0]  RdTxId             = 0,                                  // ID to be used for read transactions
   parameter ariane_pkg::ariane_cfg_t    ArianeCfg          = ariane_pkg::ArianeDefaultConfig     // contains cacheable regions
 ) (
@@ -147,7 +147,8 @@ end else begin : gen_piton_offset
 ///////////////////////////////////////////////////////
 // main control logic
 ///////////////////////////////////////////////////////
-
+  logic addr_ni;
+  assign addr_ni = is_inside_nonidempotent_regions(ArianeCfg, areq_i.fetch_paddr);
   always_comb begin : p_fsm
     // default assignment
     state_d      = state_q;
@@ -226,7 +227,7 @@ end else begin : gen_piton_offset
           // readout speculatively
           cache_rden  = cache_en_q;
 
-          if (areq_i.fetch_valid) begin
+          if (areq_i.fetch_valid && (!dreq_i.spec || !addr_ni) ) begin
             // check if we have to flush
             if (flush_d) begin
               state_d  = IDLE;
@@ -489,7 +490,7 @@ end else begin : gen_piton_offset
       else $fatal(1,"[l1 icache] cannot replace cacheline and invalidate cacheline simultaneously");
 
   invalid_state: assert property (
-    @(posedge clk_i) disable iff (!rst_ni) (state_q inside {FLUSH, IDLE, READ, MISS, TLB_MISS, KILL_ATRANS, KILL_MISS}))
+    @(posedge clk_i) disable iff (!rst_ni) (state_q inside {FLUSH, IDLE, READ, MISS, KILL_ATRANS, KILL_MISS}))
       else $fatal(1,"[l1 icache] fsm reached an invalid state");
 
   hot1: assert property (
@@ -532,4 +533,4 @@ end else begin : gen_piton_offset
 `endif
 //pragma translate_on
 
-endmodule // wt_icache
+endmodule // cva6_icache
