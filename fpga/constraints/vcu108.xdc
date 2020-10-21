@@ -103,10 +103,6 @@ set_property INTERFACE JTAG [get_ports { tck tdi tdo tms trst_n }]
 #accept sub-optimal placing
 set_property CLOCK_DEDICATED_ROUTE FALSE [get_nets tck_IBUF_inst/O]
 
-#JTAG Clock
-create_clock -period 100.000 -name tck -waveform {0.000 50.000} [get_ports tck]
-set_input_jitter tck 1.000
-
 #set JTAG reset as false path
 set_false_path -from [get_ports trst_n]
 
