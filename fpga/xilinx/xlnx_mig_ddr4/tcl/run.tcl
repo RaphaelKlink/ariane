@@ -1,6 +1,5 @@
 set partNumber $::env(XILINX_PART)
 set boardName  $::env(XILINX_BOARD)
-set boardNameShort $::env(BOARD)
 
 set ipName xlnx_mig_ddr4
 

@@ -70,7 +70,7 @@ xlnx_mig_7_ddr3:
     board_mig_param: Custom
 
 xlnx_mig_ddr4:
-  ip: xlnx_mig_ddr4
+  ip: ddr4
   vendor: xilinx.com
     config:
       ADDN_UI_CLKOUT1_FREQ_HZ: 200
