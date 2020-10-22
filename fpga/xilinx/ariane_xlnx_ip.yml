@@ -60,6 +60,13 @@ xlnx_ila:
     c_data_depth: 16384
     c_input_pipe_stages: 1
 
+xlnx_vio_reset:
+  ip: vio
+  vendor: xilinx.com
+  config:
+    C_EN_PROBE_IN_ACTIVITY: 0
+    C_NUM_PROBE_OUT: 1
+
 xlnx_mig_7_ddr3:
   ip: mig_7series
   vendor: xilinx.com

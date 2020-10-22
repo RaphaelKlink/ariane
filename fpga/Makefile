@@ -12,7 +12,8 @@ ips := xlnx_axi_clock_converter.xci  \
        xlnx_axi_gpio.xci             \
        xlnx_clk_gen.xci  			 \
 	   xlnx_mig_ddr4.xci		     \
-	   xlnx_axi_dwidth_converter_512_64.xci
+	   xlnx_axi_dwidth_converter_512_64.xci \
+	   xlnx_vio_reset.xci
 
 ips_standard := xlnx_axi_clock_converter.xci  \
        xlnx_axi_dwidth_converter.xci \
@@ -22,7 +23,9 @@ ips_standard := xlnx_axi_clock_converter.xci  \
        
 ips_ddr3 := xlnx_mig_7_ddr3.xci
 ips_ddr4 := xlnx_mig_ddr4.xci	     \
-       		xlnx_axi_dwidth_converter_512_64.xci 
+       		xlnx_axi_dwidth_converter_512_64.xci
+			   
+vio := xlnx_vio_reset.xci
 
 ips := $(addprefix $(work-dir)/, $(ips))
 ips-target := $(join $(addsuffix /ip/, $(addprefix $(ip-dir)/, $(basename $(ips)))), $(ips))

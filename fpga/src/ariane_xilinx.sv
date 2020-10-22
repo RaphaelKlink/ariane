@@ -144,7 +144,7 @@ module ariane_xilinx (
   input  logic         SYSCLK1_300_P    ,  
   input  logic         SYSCLK1_300_N    ,
   // CPU subsystem reset
-  input  logic          cpu_reset        ,
+  //input  logic          cpu_reset        , //done by VIO
   // DDR4
   output wire [16:0]   c0_ddr4_adr      ,
   output wire [1:0]    c0_ddr4_ba       ,
@@ -237,6 +237,13 @@ assign cpu_resetn = ~cpu_reset;
 `elsif VC707
 assign cpu_resetn = ~cpu_reset;
 `elsif VCU108
+
+logic cpu_reset;
+xlnx_vio_reset i_vio_reset(
+    .probe_out0 ( cpu_reset),
+    .clk        ( ddr_clock_out_300 )
+);
+
 logic cpu_resetn;
 assign cpu_resetn = ~cpu_reset;
 `endif
