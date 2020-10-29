@@ -4,10 +4,10 @@ set_property CFGBVS GND [current_design]
 
 ##Clocks
 #300 MHz Systemclock 1
-set_property PACKAGE_PIN G31 [get_ports {SYSCLK1_300_P}]
-set_property PACKAGE_PIN F31 [get_ports {SYSCLK1_300_N}]
+set_property PACKAGE_PIN G31 [get_ports SYSCLK1_300_P]
+set_property PACKAGE_PIN F31 [get_ports SYSCLK1_300_N]
 set_property IOSTANDARD DIFF_SSTL12 [get_ports -filter NAME=~SYSCLK1_300_*]
-create_clock -period 3.333 -name SYSCLK1_300 [get_ports {SYSCLK1_300_P}]
+create_clock -period 3.333 -name SYSCLK1_300 [get_ports SYSCLK1_300_P]
 
 ##switches
 set_property PACKAGE_PIN BC40 [get_ports {sw[0]}]
@@ -55,10 +55,11 @@ connect_debug_port dbg_hub/clk [get_nets clk_1]
 
 ##SD CARD
 #all of Pmod0
-set_property PACKAGE_PIN BB16 [get_ports spi_clk_o] ;#PMOD0_3
-set_property PACKAGE_PIN BC14 [get_ports spi_ss]    ;#PMOD0_0
-set_property PACKAGE_PIN BA10 [get_ports spi_mosi]  ;#PMOD0_1
-set_property PACKAGE_PIN AW16 [get_ports spi_miso]  ;#PMOD0_2
+
+set_property PACKAGE_PIN BC13 [get_ports spi_ss]        #PMOD0_4
+set_property PACKAGE_PIN BF7  [get_ports spi_mosi]      #PMOD0_5
+set_property PACKAGE_PIN AW12 [get_ports spi_miso]      #PMOD0_6
+set_property PACKAGE_PIN BC16 [get_ports spi_clk_o]     #PMOD0_7
 
 set_property IOSTANDARD LVCMOS18 [get_ports -filter NAME=~spi_*]
 
@@ -75,24 +76,24 @@ set_property IOSTANDARD LVCMOS18 [get_ports -filter NAME=~spi_*]
 
 ##Uart
 ##2 of 8 Ports of Pmod1
-set_property PACKAGE_PIN N22 [get_ports tx] ;#PMOD1_1
-set_property PACKAGE_PIN J20 [get_ports rx] ;#PMOD1_2
+set_property PACKAGE_PIN P22 [get_ports rx] ;#PMOD1_0
+set_property PACKAGE_PIN J24 [get_ports tx] ;#PMOD1_4
 
-set_property IOSTANDARD LVCMOS12 [get_ports { tx rx }]
+set_property IOSTANDARD LVCMOS12 [get_ports { tx rx}]
 
 #Create UART Interface
 create_interface UART
-set_property INTERFACE UART [get_ports { tx rx }]
+set_property INTERFACE UART [get_ports { tx rx}]
 
 
 ##JTAG
 # 5 of 8 Ports of Pmod1
 #set Package Pins
-set_property PACKAGE_PIN J24 [get_ports tck]    ;#PMOD1_4
-set_property PACKAGE_PIN T23 [get_ports tdi]    ;#PMOD1_5
-set_property PACKAGE_PIN R23 [get_ports tdo]    ;#PMOD1_6
-set_property PACKAGE_PIN R22 [get_ports tms]    ;#PMOD1_7
-set_property PACKAGE_PIN K24 [get_ports trst_n] ;#PMOD1_3
+set_property PACKAGE_PIN T23 [get_ports tck]    ;#PMOD1_1
+set_property PACKAGE_PIN R23 [get_ports tdi]    ;#PMOD1_2
+set_property PACKAGE_PIN J20 [get_ports tdo]    ;#PMOD1_6
+set_property PACKAGE_PIN K24 [get_ports tms]    ;#PMOD1_7
+set_property PACKAGE_PIN R22 [get_ports trst_n] ;#PMOD1_3
 #set IOStandard
 set_property IOSTANDARD LVCMOS12 [get_ports { tck tdi tdo tms trst_n }]
 
